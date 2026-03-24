@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dodge or Die</title>
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --bg-dark: #0a0a12;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 800px;
+            max-height: 600px;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        canvas {
+            display: block;
+            background: radial-gradient(circle, #1a1a2e 0%, #0a0a12 100%);
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 28px;
+            font-weight: 900;
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px rgba(0, 243, 255, 0.5);
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+
+        #difficulty-meter {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            font-size: 12px;
+            color: var(--neon-pink);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #menu {
+            pointer-events: auto;
+            background: rgba(10, 10, 18, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            border: 1px solid var(--neon-blue);
+            text-align: center;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+            max-width: 80%;
+        }
+
+        h1 {
+            font-size: 42px;
+            margin: 0 0 10px 0;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        #high-score-label {
+            color: var(--neon-pink);
+            font-size: 14px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .btn {
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            padding: 15px 40px;
+            font-size: 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.2s ease;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background: var(--neon-blue);
+            color: var(--bg-dark);
+            box-shadow: 0 0 30px var(--neon-blue);
+            transform: scale(1.05);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #touch-controls {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            pointer-events: none;
+        }
+
+        .mobile-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--neon-blue);
+            pointer-events: auto;
+            display: none;
+        }
+
+        @media (pointer: coarse) {
+            .mobile-btn { display: block; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui-layer">
+            <div id="stats" class="stats hidden">0000</div>
+            <div id="difficulty-meter" class="hidden">LVL 1</div>
+            
+            <!-- Step 9: The Restart/Game Over Menu -->
+            <div id="menu">
+                <h1 id="menu-title">Dodge or Die</h1>
+                <span id="high-score-label">Best: 0</span>
+                <p id="menu-text">Use Arrow Keys or A/D to move</p>
+                <button class="btn" id="start-btn">Initialize</button>
+            </div>
+        </div>
+
+        <div id="touch-controls">
+            <div class="mobile-btn" id="left-btn"></div>
+            <div class="mobile-btn" id="right-btn"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const menu = document.getElementById('menu');
+        const menuTitle = document.getElementById('menu-title');
+        const menuText = document.getElementById('menu-text');
+        const statsDisplay = document.getElementById('stats');
+        const difficultyDisplay = document.getElementById('difficulty-meter');
+        const highScoreDisplay = document.getElementById('high-score-label');
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+
+        let animationId;
+        let score = 0;
+        let highScore = 0;
+        let gameActive = false;
+        
+        let enemies = [];
+        let particles = [];
+        let difficulty = 1;
+
+        const player = {
+            x: 0,
+            y: 0,
+            width: 30,
+            height: 30,
+            speed: 8,
+            color: '#00f3ff'
+        };
+
+        const keys = {
+            left: false,
+            right: false
+        };
+
+        function resize() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            player.x = canvas.width / 2 - player.width / 2;
+            player.y = canvas.height - 70;
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+        });
+
+        const handleTouch = (btn, isPressed) => {
+            if (btn === 'left') keys.left = isPressed;
+            if (btn === 'right') keys.right = isPressed;
+        };
+
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch('left', true); });
+        leftBtn.addEventListener('touchend', () => handleTouch('left', false));
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch('right', true); });
+        rightBtn.addEventListener('touchend', () => handleTouch('right', false));
+
+        class Enemy {
+            constructor() {
+                this.width = Math.random() * 20 + 20;
+                this.height = this.width;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                this.speed = (Math.random() * 2 + 2) * difficulty;
+                this.color = '#ff0055';
+            }
+
+            update() {
+                this.y += this.speed;
+                return this.y > canvas.height;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 4 + 2;
+                this.speedX = (Math.random() - 0.5) * 10;
+                this.speedY = (Math.random() - 0.5) * 10;
+                this.color = color;
+                this.life = 1.0;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= 0.02;
+            }
+
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function spawnEnemy() {
+            // Step 9: Stop spawning if game is over
+            if (!gameActive) return;
+            enemies.push(new Enemy());
+            
+            const spawnRate = Math.max(100, 800 / difficulty);
+            setTimeout(spawnEnemy, spawnRate);
+        }
+
+        function checkCollision(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
+
+        // Step 9: Robust Game Over logic
+        function gameOver() {
+            gameActive = false;
+            // Stop the game loop to freeze the screen
+            cancelAnimationFrame(animationId);
+            
+            // Visual feedback
+            createExplosion(player.x + player.width/2, player.y + player.height/2, player.color);
+            createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0055');
+            
+            // Handle High Score
+            const finalScore = Math.floor(score);
+            if (finalScore > highScore) {
+                highScore = finalScore;
+                highScoreDisplay.innerText = `Best: ${highScore}`;
+            }
+
+            // Show Restart Menu after a short delay
+            setTimeout(() => {
+                menuTitle.innerText = "CRITICAL ERROR";
+                menuTitle.style.background = "var(--neon-pink)";
+                menuTitle.style.webkitBackgroundClip = "text";
+                menuTitle.style.webkitTextFillColor = "transparent";
+
+                menuText.innerHTML = `SYSTEM DESTROYED<br>Final Score: <span style="color:var(--neon-blue); font-size: 24px;">${finalScore}</span>`;
+                startBtn.innerText = "Reboot System";
+                
+                menu.classList.remove('hidden');
+                statsDisplay.classList.add('hidden');
+                difficultyDisplay.classList.add('hidden');
+            }, 800);
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background grid
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<canvas.width; i+=40) {
+                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i, canvas.height); ctx.stroke();
+            }
+            for(let i=0; i<canvas.height; i+=40) {
+                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width, i); ctx.stroke();
+            }
+
+            if (gameActive) {
+                if (keys.left && player.x > 0) player.x -= player.speed;
+                if (keys.right && player.x < canvas.width - player.width) player.x += player.speed;
+
+                score += 0.2; 
+                difficulty = 1 + (score / 500);
+                
+                statsDisplay.innerText = Math.floor(score).toString().padStart(4, '0');
+                difficultyDisplay.innerText = `LEVEL ${Math.floor(difficulty)}`;
+
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    const isOffScreen = e.update();
+                    
+                    if (isOffScreen) {
+                        enemies.splice(i, 1);
+                    } else {
+                        e.draw();
+                        if (checkCollision(player, e)) {
+                            gameOver();
+                        }
+                    }
+                }
+            }
+
+            // Still update particles even if gameActive is false for that cool explosion effect
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    p.draw();
+                }
+            }
+
+            if (gameActive) {
+                ctx.fillStyle = player.color;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = player.color;
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+                ctx.shadowBlur = 0;
+            }
+
+            // Always request next frame to keep particles moving after death
+            animationId = requestAnimationFrame(update);
+        }
+
+        // Step 9: Restart/Start function resets all variables
+        function startGame() {
+            // Reset state
+            score = 0;
+            difficulty = 1;
+            enemies = [];
+            particles = [];
+            gameActive = true;
+            
+            // Reset player position
+            player.x = canvas.width / 2 - player.width / 2;
+            
+            // Update UI
+            menu.classList.add('hidden');
+            statsDisplay.classList.remove('hidden');
+            difficultyDisplay.classList.remove('hidden');
+            statsDisplay.innerText = "0000";
+            difficultyDisplay.innerText = "LEVEL 1";
+            
+            // Restart spawn loop
+            spawnEnemy();
+        }
+
+        startBtn.addEventListener('click', startGame);
+        update();
+    </script>
+</body>
+</html>
